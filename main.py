@@ -36,21 +36,34 @@
 import os
 import uvicorn
 import traceback
+import numpy as np
+np.random.seed(777)
 import tensorflow as tf
+np.random.seed(777)
 
 from pydantic import BaseModel
 from urllib.request import Request
 from fastapi import FastAPI, Response, UploadFile
 from utils import load_image_into_numpy_array
+from tensorflow import keras
+from PIL import Image
 
 # Initialize Model
 # If you already put yout model in the same folder as this main.py
 # You can load .h5 model or any model below this line
 
 # If you use h5 type uncomment line below
-# model = tf.keras.models.load_model('./my_model.h5')
+model = tf.keras.models.load_model('./acne_model_v2.h5')
 # If you use saved model type uncomment line below
 # model = tf.saved_model.load("./my_model_folder")
+
+def load_and_preprocess_image(image_path):
+    image = Image.fromarray(image_path)
+    image = image.resize((150, 150))
+    image = image.convert('RGB')
+    image = np.array(image) / 1
+    print(image.shape)
+    return image
 
 app = FastAPI()
 
@@ -101,6 +114,22 @@ def predict_image(uploaded_file: UploadFile, response: Response):
         print("Image shape:", image.shape)
         
         # Step 1: (Optional, but you should have one) Do your image preprocessing
+        # Preprocess the new image
+        image = load_and_preprocess_image(image)  # Implement your own image loading and preprocessing function
+
+        # Reshape the image to match the input shape of the model
+        image = np.expand_dims(image,0)
+
+        # Make predictions
+        predictions = model.predict(image)
+        print(predictions)
+
+        # Get the predicted class label
+        predicted_class = np.argmax(predictions)
+
+        # Get the class name
+        class_names = ['Blackhead', 'Nodules', 'Papule', 'Pustules', 'Whitehead']  # Provide your own class names
+        predicted_class_name = class_names[predicted_class]
         
         # Step 2: Prepare your data to your model
         
@@ -109,7 +138,10 @@ def predict_image(uploaded_file: UploadFile, response: Response):
         
         # Step 4: Change the result your determined API output
         
-        return "Endpoint not implemented"
+        return {
+            'predicted_class': int(predicted_class),
+            'predicted_class_name': predicted_class_name
+        }
     except Exception as e:
         traceback.print_exc()
         response.status_code = 500
